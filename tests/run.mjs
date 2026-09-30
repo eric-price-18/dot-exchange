@@ -70,4 +70,8 @@ try{
  const hidden=await checkedFetch('http://127.0.0.1:8788/api/v1/questions/'+id);assert.equal(hidden.status,404);await hidden.text();
  await stop(server);assert.equal(analyticsTotals().questions_created,12,'Analytics survived server restart');
  console.log('PASS: D1 question and answer survived server restart; author withdrawal hides them.');
+}catch(error){
+ console.error('Local test Worker diagnostics:');
+ console.error(fs.readFileSync('.sites-runtime/e2e-server.log','utf8'));
+ throw error;
 }finally{await stop(server);fs.closeSync(log);fs.rmSync(stateDir,{recursive:true,force:true});}
