@@ -25,8 +25,8 @@ function localQuery(sql){
 }
 function analyticsTotals(){return Object.fromEntries(localQuery('SELECT metric,SUM(count) AS n FROM analytics_daily GROUP BY metric').map(r=>[r.metric,r.n]));}
 const log=fs.openSync('.sites-runtime/e2e-server.log','w');
-function launch(){return spawn(process.execPath,['--import','./scripts/sites-env.mjs','./node_modules/wrangler/bin/wrangler.js','dev','--config',config,'--local','--persist-to',stateDir,'--ip','127.0.0.1','--inspector-port','0','--port','8788'],{detached:true,env,stdio:['ignore',log,log]});}
-async function ready(){for(let n=0;n<60;n++){try{const r=await checkedFetch('http://127.0.0.1:8788/api/v1/questions');const ok=r.ok;await r.text();if(ok)return;}catch{}await new Promise(r=>setTimeout(r,500));}throw Error('Local server not ready; see .sites-runtime/e2e-server.log');}
+function launch(){return spawn(process.execPath,['tests/worker.mjs',stateDir],{detached:true,env,stdio:['ignore',log,log]});}
+async function ready(p){for(let n=0;n<60;n++){if(p.exitCode!==null||p.signalCode!==null)throw Error('Local test Worker exited before readiness; see .sites-runtime/e2e-server.log');try{const r=await checkedFetch('http://127.0.0.1:8788/api/v1/questions');const ok=r.ok;await r.text();if(ok)return;}catch{}await new Promise(r=>setTimeout(r,500));}throw Error('Local server not ready; see .sites-runtime/e2e-server.log');}
 async function stop(p){
  if(p.exitCode!==null||p.signalCode!==null)return;
  const exited=new Promise(r=>p.once('exit',r));
@@ -42,7 +42,7 @@ async function checkedFetch(url,options={}){
 localQuery("INSERT INTO analytics_daily(day,metric,channel,operation,outcome,traffic_class,count) VALUES('2000-01-01','page_requests','web','home','success','unclassified',1)");
 let server=launch();
 try{
- await ready();
+ await ready(server);
  await new Promise((resolve,reject)=>{const t=spawn(process.execPath,['tests/read-surfaces.mjs'],{env,stdio:'inherit'});t.on('exit',c=>c===0?resolve():reject(Error('Read-surface tests failed')));});
  await new Promise((resolve,reject)=>{const t=spawn(process.execPath,['tests/api.mjs'],{env,stdio:'inherit'});t.on('exit',c=>c===0?resolve():reject(Error('API tests failed')));});
  // Allow Worker waitUntil tasks to finish before inspecting local-only aggregates.
@@ -61,7 +61,7 @@ try{
  for(const prohibited of ['Synthetic','example.test','local-e2e','UI lost','qa-test','durability','q_','a_'])assert.ok(!snapshot.includes(prohibited),'Analytics must not contain '+prohibited);
  assert.equal(localQuery("SELECT COUNT(*) AS n FROM analytics_daily WHERE day='2000-01-01'")[0].n,0,'Expired aggregates pruned');
  console.log('PASS: aggregate counts, privacy, MCP semantic outcomes, exclusions, no public analytics endpoints, and retention on local D1.');
- server=launch();await ready();
+ server=launch();await ready(server);
  const {id,actor}=JSON.parse(fs.readFileSync('.sites-runtime/durability-test.json','utf8'));
  const q=await (await checkedFetch('http://127.0.0.1:8788/api/v1/questions/'+id)).json();
  assert.equal(q.data.answers.length,1);

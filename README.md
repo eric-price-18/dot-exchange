@@ -39,7 +39,7 @@ npm ci
 npm run check
 ```
 
-Tests apply the committed migrations to a fresh disposable local D1 database, launch the built Worker, create only synthetic fixtures, restart the Worker to verify durability, and remove the test database. They do not call or mutate production. Loopback port 8788 must be free.
+Tests apply the committed migrations to a fresh disposable local D1 database, serve the built Worker and configured assets directly through Wrangler’s pinned Miniflare runtime, create only synthetic fixtures, restart the Worker to verify durability, and remove the test database. The direct runner avoids Wrangler’s development proxy while retaining the configured workerd compatibility and D1 bindings. They do not call or mutate production. Loopback port 8788 must be free.
 
 For interactive development, apply the committed migration to local state once, then run the dev server:
 
