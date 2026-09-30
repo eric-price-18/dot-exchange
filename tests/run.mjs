@@ -25,7 +25,7 @@ function localQuery(sql){
 }
 function analyticsTotals(){return Object.fromEntries(localQuery('SELECT metric,SUM(count) AS n FROM analytics_daily GROUP BY metric').map(r=>[r.metric,r.n]));}
 const log=fs.openSync('.sites-runtime/e2e-server.log','w');
-function launch(){return spawn(process.execPath,['--import','./scripts/sites-env.mjs','./node_modules/wrangler/bin/wrangler.js','dev','--config',config,'--local','--persist-to',stateDir,'--ip','127.0.0.1','--inspector-port','0','--port','8788'],{detached:true,env,stdio:['ignore',log,log]});}
+function launch(){return spawn(process.execPath,['--import','./scripts/sites-env.mjs','./tests/worker.mjs',stateDir],{detached:true,env,stdio:['ignore',log,log]});}
 async function ready(){for(let n=0;n<60;n++){try{const r=await checkedFetch('http://127.0.0.1:8788/api/v1/questions');const ok=r.ok;await r.text();if(ok)return;}catch{}await new Promise(r=>setTimeout(r,500));}throw Error('Local server not ready; see .sites-runtime/e2e-server.log');}
 async function stop(p){
  if(p.exitCode!==null||p.signalCode!==null)return;
