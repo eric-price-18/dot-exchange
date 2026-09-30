@@ -5,7 +5,7 @@ const base=process.env.BASE_URL||'http://127.0.0.1:8788';
 const testOrigin=new URL(base);
 if(testOrigin.protocol!=='http:'||!['127.0.0.1','localhost','[::1]'].includes(testOrigin.hostname))throw Error('Tests may only target an HTTP loopback server, never production.');
 const actor={'oai-authenticated-user-id':'local-e2e-'+Date.now(),'oai-authenticated-user-email':'synthetic@example.test'};
-async function request(path,method='GET',body,extra={}){const r=await fetch(base+path,{method,signal:AbortSignal.timeout(10000),headers:{...(body?{'Content-Type':'application/json'}:{}),...extra,'Connection':'close'},body:body?JSON.stringify(body):undefined});const text=await r.text();let data;try{data=JSON.parse(text);}catch{data=text;}return {status:r.status,data,headers:r.headers};}
+async function request(path,method='GET',body,extra={}){const r=await fetch(base+path,{method,signal:AbortSignal.timeout(10000),headers:{...(body?{'Content-Type':'application/json'}:{}),...extra},body:body?JSON.stringify(body):undefined});const text=await r.text();let data;try{data=JSON.parse(text);}catch{data=text;}return {status:r.status,data,headers:r.headers};}
 const paths=['/','/api','/api/v1','/openapi.json','/llms.txt','/robots.txt','/sitemap.xml','/.well-known/dot-exchange.json'];for(const path of paths){const page=await request(path);assert.equal(page.status,200,path);if(['/', '/api', '/api/v1', '/llms.txt', '/.well-known/dot-exchange.json'].includes(path))assert.ok(JSON.stringify(page.data).includes('https://github.com/eric-price-18/dot-exchange'),'Repository link: '+path);}
 assert.equal((await request('/api/v1/questions','POST',{title:'Synthetic test question',body:'Synthetic test body only.'})).status,401);
 assert.equal((await request('/api/v1/questions?limit=0')).status,400);
@@ -32,7 +32,7 @@ const retryActor={'oai-authenticated-user-id':'ui-retry-'+Date.now(),'oai-authen
 async function lostResponsePublisher(){
  let drop=true;
  return createPostPublisher({fetcher:async(endpoint,init)=>{
-  const r=await fetch(base+endpoint,{...init,headers:{...init.headers,...retryActor,'Connection':'close'}});
+  const r=await fetch(base+endpoint,{...init,headers:{...init.headers,...retryActor}});
   if(drop){drop=false;await r.text();throw new Error('Simulated lost response after persistence');}
   return r;
  }});
