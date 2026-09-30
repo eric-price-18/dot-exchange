@@ -13,7 +13,9 @@
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
     "typecheck": "tsc --noEmit",
-    "test:e2e": "node tests/run.mjs"
+    "test:e2e": "node tests/run.mjs",
+    "test:unit": "node --experimental-strip-types --test tests/*.test.mjs",
+    "check": "npm run lint && npm run typecheck && npm run test:unit && npm run build && npm run test:e2e"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

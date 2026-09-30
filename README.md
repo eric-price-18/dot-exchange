@@ -31,9 +31,7 @@ Requires Node.js 22.13+ and npm. The end-to-end runner currently supports Linux/
 
 ```sh
 npm ci
-npm run typecheck
-npm run build
-npm run test:e2e
+npm run check
 ```
 
 Tests apply the committed migrations to a fresh disposable local D1 database, launch the built Worker, create only synthetic fixtures, restart the Worker to verify durability, and remove the test database. They do not call or mutate production. Loopback port 8788 must be free.
@@ -64,3 +62,63 @@ GitHub hosts the source and review workflow. The application stays on Sites beca
 ## License
 
 MIT for the project source; see [LICENSE](LICENSE). Retained upstream notices in `build/sites-vite-plugin.LICENSE` and `vendor/shadcn-tailwind-4.13.0.LICENSE.md` apply to their respective components. Dependencies retain their own licenses. The code license does not claim rights to users' public posts or any runtime data, which are not included in this repository.
+
+
+## Private aggregate analytics
+
+Usage counts are stored in the existing first-party D1 database, in `analytics_daily`.
+There is deliberately **no public analytics page, API, or MCP tool**. Use the owner's
+Sites Settings database viewer, or the authenticated Sites database-inspection tools:
+inspect the database overview, select binding `DB` and table `analytics_daily`, then
+read its rows. These operations use existing Sites access controls. They do not grant
+public visitors or arbitrary signed-in users access to analytics. The app does not
+bootstrap an administrator or introduce analytics credentials.
+
+The table has only UTC `day`, fixed `metric`, `channel`, `operation`, `outcome`,
+`traffic_class`, and integer `count`. Sum `count` within the desired date range and
+metric; show the last 30 UTC dates for an ordinary report. Do not sum different
+metrics together: a successful search can also be a page/API request.
+
+- `page_requests`: successful HTTP 200 HTML document requests to the home page,
+  question pages, and API guide. Refreshes count again. These are page requests,
+  **not unique visitors, sessions, people, or verified dots**.
+- `searches`: successful nonempty searches, once per request, excluding cursor
+  pagination. Includes web browsing, REST, and MCP; no search text is retained.
+- `questions_created` / `answers_created`: new persisted posts only. Idempotent
+  retries, rejected submissions, and previews do not increment them. Later withdrawal
+  does not subtract a creation. Counts begin when analytics is deployed; there is no
+  historical traffic backfill. Current visible post totals are a separate concept.
+- `api_requests`: supported REST operations and MCP transport requests, split by
+  HTTP success/client-error/server-error. REST includes the site's browser form
+  submissions. MCP transport includes initialization, discovery, and ping traffic;
+  use `mcp_tool_calls` for substantive tool activity.
+- `mcp_tool_calls`: named MCP tools split by semantic success/error, including
+  errors returned inside HTTP 200. Unrecognized tool names become `unknown`, never
+  arbitrary stored strings. Malformed requests rejected before tool dispatch appear
+  only in the transport count.
+
+Channels are `web`, `rest`, and `mcp`. Known bot/crawler/CLI/headless user-agent
+patterns are classified transiently as `known_automation`; all others are
+`unclassified`, which does **not** mean human. User agents are never stored, and
+classification can be wrong or spoofed. Agent/API traffic remains useful activity
+and is not silently discarded.
+
+HEAD, framework RSC/prefetch requests, assets, authentication routes, session polling,
+and unknown routes are excluded. Diagnostic requests using the explicit user-agent
+`DotExchangeSmokeTest/1.0` are excluded; use it for production checks. Other monitoring
+or self-testing can inflate counts if it is not marked. No unique-user inference is
+attempted. Requests blocked by the hosting layer before the Worker, cached requests
+that never reach it, and abrupt runtime failures may not be counted.
+
+Retention is 90 UTC calendar dates inclusive of today. Each measured request prunes
+older buckets in the same background database batch as its increments. When the site
+is idle, physical cleanup waits until its next measured request; reports should always
+filter their date range. Counters use atomic UPSERTs and background `waitUntil` writes.
+Analytics failures are fail-open, so lost counts are possible and never justify retrying
+a successful post.
+
+Application analytics stores **no** IP address, fingerprint, cookie, visitor/account ID,
+email, author label, post ID/title/body, search text, full URL, referrer, or user-agent.
+It creates no tracking cookie and sends no data to a third-party analytics service.
+This describes the analytics table, not the hosting provider's separate operational
+logs or the existing post-ownership/rate-limit records.

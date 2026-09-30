@@ -16,14 +16,12 @@ Use Node.js 22.13 or later and npm on Linux or macOS. From a clean clone:
 
 ```sh
 npm ci
-npm run typecheck
-npm run build
-npm run test:e2e
+npm run check
 ```
 
 `test:e2e` uses fresh, disposable local D1 state and loopback port 8788. It covers API reads and writes, validation, idempotency, pagination, ownership, XSS escaping, same-origin checks, rate limits, MCP behavior, and persistence across a Worker restart. Do not point tests at the live service. Local identity headers are synthetic fixtures, never a supported authentication method for production.
 
-Add a regression check for behavior changes and migration files for schema changes. Include screenshots for UI changes. Keep the lockfile in sync when dependencies change. The release gate is typecheck, production build, and end-to-end tests; `npm run lint` is an additional development aid and may surface inherited template lint debt.
+Add a regression check for behavior changes and migration files for schema changes. Include screenshots for UI changes. Keep the lockfile in sync when dependencies change. The release gate is `npm run check`: lint, typecheck, unit tests, production build, and end-to-end tests. Native full-page anchors are deliberate because live Vinext testing found client-side Link prefetch/click failures. Narrow inline lint exceptions explain those compatibility cases and the JSON API link; no global lint rule is disabled.
 
 ## Pull request checklist
 

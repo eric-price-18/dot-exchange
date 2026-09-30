@@ -2,6 +2,7 @@ import {spawn,spawnSync} from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert/strict';
+import { DatabaseSync } from 'node:sqlite';
 // Tests use a fresh local-only D1 directory, never production or a developer's data.
 fs.mkdirSync('.sites-runtime',{recursive:true});
 const stateDir=fs.mkdtempSync(path.resolve('.sites-runtime/test-db-'));
@@ -12,20 +13,61 @@ for(const migration of fs.readdirSync('drizzle').filter(f=>f.endsWith('.sql')).s
  const r=spawnSync(process.execPath,['--import','./scripts/sites-env.mjs','./node_modules/wrangler/bin/wrangler.js','d1','execute','DB','--local','--config',config,'--persist-to',stateDir,'--file','drizzle/'+migration],{env,stdio:'inherit'});
  if(r.status!==0)throw Error('Local test migration failed.');
 }
+function localQuery(sql){
+ // Read only this test's isolated local SQLite fixture, never hosted D1.
+ // Starting a second Miniflare through Wrangler can hang while the server owns it.
+ const folder=path.join(stateDir,'v3/d1/miniflare-D1DatabaseObject');
+ const files=fs.readdirSync(folder).filter(f=>f.endsWith('.sqlite')&&f!=='metadata.sqlite');
+ assert.equal(files.length,1,'Exactly one isolated local D1 fixture');
+ const db=new DatabaseSync(path.join(folder,files[0]));
+ try{db.exec('PRAGMA busy_timeout=5000');return db.prepare(sql).all().map(r=>({...r}));}
+ finally{db.close();}
+}
+function analyticsTotals(){return Object.fromEntries(localQuery('SELECT metric,SUM(count) AS n FROM analytics_daily GROUP BY metric').map(r=>[r.metric,r.n]));}
 const log=fs.openSync('.sites-runtime/e2e-server.log','w');
 function launch(){return spawn(process.execPath,['--import','./scripts/sites-env.mjs','./node_modules/wrangler/bin/wrangler.js','dev','--config',config,'--local','--persist-to',stateDir,'--ip','127.0.0.1','--inspector-port','0','--port','8788'],{detached:true,env,stdio:['ignore',log,log]});}
-async function ready(){for(let n=0;n<60;n++){try{const r=await fetch('http://127.0.0.1:8788/api/v1/questions');if(r.ok)return;}catch{}await new Promise(r=>setTimeout(r,500));}throw Error('Local server not ready; see .sites-runtime/e2e-server.log');}
-async function stop(p){if(p.exitCode!==null)return;process.kill(-p.pid,'SIGTERM');await new Promise(r=>p.on('exit',r));await new Promise(r=>setTimeout(r,300));}
+async function ready(){for(let n=0;n<60;n++){try{const r=await checkedFetch('http://127.0.0.1:8788/api/v1/questions');const ok=r.ok;await r.text();if(ok)return;}catch{}await new Promise(r=>setTimeout(r,500));}throw Error('Local server not ready; see .sites-runtime/e2e-server.log');}
+async function stop(p){
+ if(p.exitCode!==null||p.signalCode!==null)return;
+ const exited=new Promise(r=>p.once('exit',r));
+ process.kill(-p.pid,'SIGTERM');
+ let timer;
+ await Promise.race([exited,new Promise(r=>{timer=setTimeout(()=>{try{process.kill(-p.pid,'SIGKILL');}catch{}r();},5000);})]);
+ clearTimeout(timer);
+ await new Promise(r=>setTimeout(r,300));
+}
+async function checkedFetch(url,options={}){
+ return fetch(url,{...options,headers:{...options.headers,'Connection':'close'},signal:AbortSignal.timeout(10000)});
+}
+localQuery("INSERT INTO analytics_daily(day,metric,channel,operation,outcome,traffic_class,count) VALUES('2000-01-01','page_requests','web','home','success','unclassified',1)");
 let server=launch();
 try{
  await ready();
+ await new Promise((resolve,reject)=>{const t=spawn(process.execPath,['tests/read-surfaces.mjs'],{env,stdio:'inherit'});t.on('exit',c=>c===0?resolve():reject(Error('Read-surface tests failed')));});
  await new Promise((resolve,reject)=>{const t=spawn(process.execPath,['tests/api.mjs'],{env,stdio:'inherit'});t.on('exit',c=>c===0?resolve():reject(Error('API tests failed')));});
- await stop(server);server=launch();await ready();
+ // Allow Worker waitUntil tasks to finish before inspecting local-only aggregates.
+ await new Promise(r=>setTimeout(r,200));
+ await stop(server);
+ const totals=analyticsTotals();
+ console.log('Local aggregate verification:',totals);
+ assert.equal(totals.questions_created,12,'New questions count once despite idempotent/lost-response retries');
+ assert.equal(totals.answers_created,2,'New answers count once despite retries');
+ assert.equal(totals.searches,3,'Successful searches, no cursor-pagination searches');
+ assert.equal(totals.page_requests,3,'Home, API guide, and question document');
+ assert.equal(totals.mcp_tool_calls,3,'One success and two semantic tool errors');
+ const mcpOutcomes=localQuery("SELECT outcome,SUM(count) AS n FROM analytics_daily WHERE metric='mcp_tool_calls' GROUP BY outcome");
+ assert.deepEqual(Object.fromEntries(mcpOutcomes.map(r=>[r.outcome,r.n])),{error:2,success:1});
+ const snapshot=JSON.stringify(localQuery('SELECT * FROM analytics_daily'));
+ for(const prohibited of ['Synthetic','example.test','local-e2e','UI lost','qa-test','durability','q_','a_'])assert.ok(!snapshot.includes(prohibited),'Analytics must not contain '+prohibited);
+ assert.equal(localQuery("SELECT COUNT(*) AS n FROM analytics_daily WHERE day='2000-01-01'")[0].n,0,'Expired aggregates pruned');
+ console.log('PASS: aggregate counts, privacy, MCP semantic outcomes, exclusions, no public analytics endpoints, and retention on local D1.');
+ server=launch();await ready();
  const {id,actor}=JSON.parse(fs.readFileSync('.sites-runtime/durability-test.json','utf8'));
- const q=await (await fetch('http://127.0.0.1:8788/api/v1/questions/'+id)).json();
+ const q=await (await checkedFetch('http://127.0.0.1:8788/api/v1/questions/'+id)).json();
  assert.equal(q.data.answers.length,1);
- const withdrawal=await fetch('http://127.0.0.1:8788/api/v1/posts/'+id,{method:'DELETE',headers:actor});
- assert.equal(withdrawal.status,200);
- assert.equal((await fetch('http://127.0.0.1:8788/api/v1/questions/'+id)).status,404);
+ const withdrawal=await checkedFetch('http://127.0.0.1:8788/api/v1/posts/'+id,{method:'DELETE',headers:actor});
+ assert.equal(withdrawal.status,200);await withdrawal.text();
+ const hidden=await checkedFetch('http://127.0.0.1:8788/api/v1/questions/'+id);assert.equal(hidden.status,404);await hidden.text();
+ await stop(server);assert.equal(analyticsTotals().questions_created,12,'Analytics survived server restart');
  console.log('PASS: D1 question and answer survived server restart; author withdrawal hides them.');
 }finally{await stop(server);fs.closeSync(log);fs.rmSync(stateDir,{recursive:true,force:true});}
