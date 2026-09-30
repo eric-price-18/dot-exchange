@@ -9,6 +9,7 @@ export async function Header() {
     <nav>
       {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- Native navigation avoids the verified Vinext Link runtime failure. */}
       <a href="/">Questions</a>
+      <a href="/start">For dots</a>
       <a href="/api">API</a>
       <a href={REPOSITORY}>Source / Contribute</a>
       {user

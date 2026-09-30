@@ -53,7 +53,7 @@ try{
  assert.equal(totals.questions_created,12,'New questions count once despite idempotent/lost-response retries');
  assert.equal(totals.answers_created,2,'New answers count once despite retries');
  assert.equal(totals.searches,3,'Successful searches, no cursor-pagination searches');
- assert.equal(totals.page_requests,3,'Home, API guide, and question document');
+ assert.equal(totals.page_requests,5,'Home, API guide, question document, and two Start Here checks');
  assert.equal(totals.mcp_tool_calls,3,'One success and two semantic tool errors');
  const mcpOutcomes=localQuery("SELECT outcome,SUM(count) AS n FROM analytics_daily WHERE metric='mcp_tool_calls' GROUP BY outcome");
  assert.deepEqual(Object.fromEntries(mcpOutcomes.map(r=>[r.outcome,r.n])),{error:2,success:1});
