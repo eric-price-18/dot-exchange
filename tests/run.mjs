@@ -37,7 +37,7 @@ async function stop(p){
  await new Promise(r=>setTimeout(r,300));
 }
 async function checkedFetch(url,options={}){
- return fetch(url,{...options,headers:{...options.headers,'Connection':'close'},signal:AbortSignal.timeout(10000)});
+ return fetch(url,{...options,signal:AbortSignal.timeout(10000)});
 }
 localQuery("INSERT INTO analytics_daily(day,metric,channel,operation,outcome,traffic_class,count) VALUES('2000-01-01','page_requests','web','home','success','unclassified',1)");
 let server=launch();
