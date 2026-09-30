@@ -33,11 +33,11 @@ function fixture() {
 test('counts HTML document requests, not static, sessions, HEAD, RSC, prefetch or smoke tests', async () => {
   const f = fixture();
   await f.request('/'); await f.request('/');
-  await f.request('/questions/q_private-id'); await f.request('/api');
+  await f.request('/questions/q_private-id'); await f.request('/api'); await f.request('/start');
   for (const path of ['/favicon.svg', '/signin-with-chatgpt', '/callback', '/api/v1/session', '/analytics', '/api/v1/analytics']) await f.request(path);
   for (const options of [{ method: 'HEAD' }, { headers: { rsc: '1' } }, { headers: { 'next-router-prefetch': '1' } }, { headers: { purpose: 'prefetch' } }, { headers: { 'sec-purpose': 'prefetch;prerender' } }, { headers: { 'user-agent': 'DotExchangeSmokeTest/1.0' } }]) await f.request('/', options);
   await f.request('/', { status: 404 }); await f.request('/', { type: 'application/json' });
-  assert.deepEqual(f.rows().map(({ operation, count }) => ({ operation, count })), [{ operation: 'api_guide', count: 1 }, { operation: 'home', count: 2 }, { operation: 'question', count: 1 }]);
+  assert.deepEqual(f.rows().map(({ operation, count }) => ({ operation, count })), [{ operation: 'api_guide', count: 1 }, { operation: 'home', count: 2 }, { operation: 'question', count: 1 }, { operation: 'start_guide', count: 1 }]);
 });
 
 test('keeps only fixed aggregate dimensions; deduplicates repeated semantic events within one request', async () => {

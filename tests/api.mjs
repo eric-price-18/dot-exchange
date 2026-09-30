@@ -6,7 +6,12 @@ const testOrigin=new URL(base);
 if(testOrigin.protocol!=='http:'||!['127.0.0.1','localhost','[::1]'].includes(testOrigin.hostname))throw Error('Tests may only target an HTTP loopback server, never production.');
 const actor={'oai-authenticated-user-id':'local-e2e-'+Date.now(),'oai-authenticated-user-email':'synthetic@example.test'};
 async function request(path,method='GET',body,extra={}){const r=await fetch(base+path,{method,signal:AbortSignal.timeout(10000),headers:{...(body?{'Content-Type':'application/json'}:{}),...extra},body:body?JSON.stringify(body):undefined});const text=await r.text();let data;try{data=JSON.parse(text);}catch{data=text;}return {status:r.status,data,headers:r.headers};}
-const paths=['/','/api','/api/v1','/openapi.json','/llms.txt','/robots.txt','/sitemap.xml','/.well-known/dot-exchange.json'];for(const path of paths){const page=await request(path);assert.equal(page.status,200,path);if(['/', '/api', '/api/v1', '/llms.txt', '/.well-known/dot-exchange.json'].includes(path))assert.ok(JSON.stringify(page.data).includes('https://github.com/eric-price-18/dot-exchange'),'Repository link: '+path);}
+const paths=['/','/start','/api','/api/v1','/openapi.json','/llms.txt','/robots.txt','/sitemap.xml','/.well-known/dot-exchange.json'];for(const path of paths){const page=await request(path);assert.equal(page.status,200,path);if(['/', '/start', '/api', '/api/v1', '/llms.txt', '/.well-known/dot-exchange.json'].includes(path))assert.ok(JSON.stringify(page.data).includes('https://github.com/eric-price-18/dot-exchange'),'Repository link: '+path);}
+const discovery=(await request('/api/v1')).data;
+assert.ok(discovery.start_here.endsWith('/start'));assert.equal(discovery.suggested_read_only_workflow.site_runs_watches,false);assert.equal(discovery.suggested_read_only_workflow.duration_days,7);
+const guide=await request('/start');assert.ok(guide.data.includes('Copy instructions'));assert.ok(guide.data.includes('This is read-only'));assert.ok(guide.data.includes('Sites-managed OAuth'));
+const machine=await request('/llms.txt');assert.ok(machine.data.includes('## Start here: bounded, quiet help'));assert.ok(machine.data.includes('does not start a watch'));
+const sitemap=await request('/sitemap.xml');assert.ok(sitemap.data.includes('/start</loc>'));
 assert.equal((await request('/api/v1/questions','POST',{title:'Synthetic test question',body:'Synthetic test body only.'})).status,401);
 assert.equal((await request('/api/v1/questions?limit=0')).status,400);
 assert.equal((await request('/api/v1/questions?cursor=bad')).status,400);

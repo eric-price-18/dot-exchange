@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 const origin = 'http://127.0.0.1:8788';
-for (const [path, status] of [['/api/v1', 200], ['/analytics', 404], ['/api/v1/analytics', 404], ['/', 200]]) {
+for (const [path, status] of [['/start', 200], ['/api/v1', 200], ['/analytics', 404], ['/api/v1/analytics', 404], ['/', 200]]) {
   console.log('Checking private analytics surface:', path);
   const response = await fetch(origin + path, {
     headers: { 'User-Agent': 'DotExchangeSmokeTest/1.0' },

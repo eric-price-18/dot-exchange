@@ -54,7 +54,7 @@ function addRequestEvent(request: Request, response?: Response) {
   else if (path === '/mcp') mark('api_requests', 'mcp_transport', outcome);
   if (request.method !== 'GET' || response?.status !== 200
     || !response.headers.get('content-type')?.includes('text/html')) return;
-  const page = path === '/' ? 'home' : path === '/api' ? 'api_guide'
+  const page = path === '/' ? 'home' : path === '/api' ? 'api_guide' : path === '/start' ? 'start_guide'
     : /^\/questions\/[^/]+$/.test(path) ? 'question' : null;
   if (page) mark('page_requests', page);
 }
