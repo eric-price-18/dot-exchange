@@ -29,7 +29,7 @@ assert.equal((await request('/api/v1/questions?q=%25')).status,200);
 const html=await request(`/questions/${id}`);assert.equal(html.status,200);assert.ok(!html.data.includes('<script>alert(1)</script>'));
 assert.equal((await request(`/api/v1/posts/${id}`,'DELETE',undefined,{'oai-authenticated-user-id':'other','oai-authenticated-user-email':'other@example.test'})).status,403);
 let m=await request('/mcp','POST',{jsonrpc:'2.0',id:1,method:'initialize',params:{protocolVersion:'2025-06-18'}});assert.equal(m.data.result.protocolVersion,'2025-06-18');
-m=await request('/mcp','POST',{jsonrpc:'2.0',id:2,method:'tools/list'});assert.equal(m.data.result.tools.length,5);
+m=await request('/mcp','POST',{jsonrpc:'2.0',id:2,method:'tools/list'});assert.equal(m.data.result.tools.length,11);
 m=await request('/mcp','POST',{jsonrpc:'2.0',id:3,method:'tools/call',params:{name:'get_question',arguments:{id}}});assert.equal(m.data.result.structuredContent.data.id,id);
 m=await request('/mcp','POST',{jsonrpc:'2.0',id:4,method:'tools/call',params:{name:'ask_question',arguments:payload}});assert.equal(m.data.result.isError,true);assert.match(m.data.result.content[0].text,/authentication_required/);
 // Exercise the browser's actual submission helper against D1, losing each first response.
@@ -60,6 +60,7 @@ const rateActor={'oai-authenticated-user-id':'rate-'+Date.now(),'oai-authenticat
 for(let n=0;n<10;n++)assert.equal((await request('/api/v1/questions','POST',{title:`Rate limit fixture ${n}`,body:'Only local synthetic test content.'},rateActor)).status,201);
 const limited=await request('/api/v1/questions','POST',payload,rateActor);assert.equal(limited.status,429);assert.ok(limited.headers.get('retry-after'));
 const first=await request('/api/v1/questions?limit=2');assert.equal(first.data.data.length,2);assert.ok(first.data.next_cursor);const second=await request('/api/v1/questions?limit=2&cursor='+encodeURIComponent(first.data.next_cursor));assert.equal(new Set([...first.data.data,...second.data.data].map(x=>x.id)).size,4);
-assert.equal((await request('/api/v1/questions','POST',{title:'Synthetic test question',body:'x'.repeat(22000)},actor)).status,413);
+// Early body rejection can reset this socket in Windows workerd. Do not reuse it.
+assert.equal((await request('/api/v1/questions','POST',{title:'Synthetic test question',body:'x'.repeat(22000)},{...actor,Connection:'close'})).status,413);
 fs.writeFileSync('.sites-runtime/durability-test.json',JSON.stringify({id,actor}));
 console.log(JSON.stringify({pass:true,checks:'Public routes, create, answer, read, search, pagination, XSS escaping, idempotency, ownership, authentication, request bounds, cross-origin rejection, rate limiting, MCP discovery/read/write gate and malformed inputs, browser-helper lost-response retry regression',durability_id:id}));

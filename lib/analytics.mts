@@ -3,12 +3,12 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 // Aggregate-only telemetry. Never pass arbitrary request/user/content values to D1.
 type Channel = 'web' | 'rest' | 'mcp';
 type Outcome = 'success' | 'client_error' | 'server_error' | 'other' | 'error';
-type Metric = 'page_requests' | 'searches' | 'questions_created' | 'answers_created' | 'api_requests' | 'mcp_tool_calls';
+type Metric = 'page_requests' | 'searches' | 'questions_created' | 'answers_created' | 'tips_created' | 'replies_created' | 'api_requests' | 'mcp_tool_calls';
 type Traffic = 'known_automation' | 'unclassified';
 type Event = { metric: Metric; operation: string; outcome: Outcome };
 type Context = { channel: Channel; events: Map<string, Event> };
 const contexts = new AsyncLocalStorage<Context>();
-const MCP_TOOLS = new Set(['list_questions', 'get_question', 'ask_question', 'answer_question', 'withdraw_post']);
+const MCP_TOOLS = new Set(['list_questions', 'get_question', 'ask_question', 'answer_question', 'withdraw_post', 'list_tips', 'get_tip', 'publish_tip', 'reply_to_tip', 'append_update', 'set_accepted_answer']);
 const DAY_MS = 86_400_000;
 export const RETENTION_DAYS = 90;
 
@@ -20,8 +20,8 @@ function mark(metric: Metric, operation = 'all', outcome: Outcome = 'success') {
   context.events.set(`${metric}:${operation}:${outcome}`, event);
 }
 export function markSearch() { mark('searches'); }
-export function markCreated(kind: 'question' | 'answer') {
-  mark(kind === 'question' ? 'questions_created' : 'answers_created');
+export function markCreated(kind: 'question' | 'answer' | 'tip' | 'reply') {
+  mark(({question:'questions_created',answer:'answers_created',tip:'tips_created',reply:'replies_created'} as const)[kind]);
 }
 export function markMcpTool(name: unknown, success: boolean) {
   mark('mcp_tool_calls', typeof name === 'string' && MCP_TOOLS.has(name) ? name : 'unknown', success ? 'success' : 'error');
@@ -41,6 +41,11 @@ function statusOutcome(status: number): Outcome {
 function restOperation(path: string, method: string): string | null {
   if (path === '/api/v1') return 'discovery';
   if (path === '/api/v1/questions') return method === 'POST' ? 'question_create' : 'questions_list';
+  if (path === '/api/v1/tips') return method === 'POST' ? 'tip_create' : 'tips_list';
+  if (/^\/api\/v1\/tips\/[^/]+\/replies$/.test(path)) return 'reply_create';
+  if (/^\/api\/v1\/tips\/[^/]+$/.test(path)) return 'tip_read';
+  if (/^\/api\/v1\/questions\/[^/]+\/acceptance$/.test(path)) return 'question_acceptance';
+  if (/^\/api\/v1\/posts\/[^/]+\/updates$/.test(path)) return 'post_update';
   if (/^\/api\/v1\/questions\/[^/]+\/answers$/.test(path)) return 'answer_create';
   if (/^\/api\/v1\/questions\/[^/]+$/.test(path)) return 'question_read';
   if (/^\/api\/v1\/posts\/[^/]+$/.test(path)) return 'post_withdraw';
@@ -55,7 +60,7 @@ function addRequestEvent(request: Request, response?: Response) {
   if (request.method !== 'GET' || response?.status !== 200
     || !response.headers.get('content-type')?.includes('text/html')) return;
   const page = path === '/' ? 'home' : path === '/api' ? 'api_guide' : path === '/start' ? 'start_guide'
-    : /^\/questions\/[^/]+$/.test(path) ? 'question' : null;
+    : path === '/tips' ? 'tips' : /^\/tips\/[^/]+$/.test(path) ? 'tip' : /^\/questions\/[^/]+$/.test(path) ? 'question' : null;
   if (page) mark('page_requests', page);
 }
 

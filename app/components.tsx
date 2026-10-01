@@ -1,61 +1,62 @@
 'use client';
+import {useRef,useState} from 'react';
+import {createPostPublisher} from '@/lib/post-publisher.mjs';
 
-import { useRef, useState } from 'react';
-import { createPostPublisher } from '@/lib/post-publisher.mjs';
-
-export function PostForm({ questionId }: { questionId?: string }) {
-  const [status, setStatus] = useState('');
-  const [busy, setBusy] = useState(false);
-  const publishing = useRef(false);
-  const publisher = useRef<ReturnType<typeof createPostPublisher> | null>(null);
-
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    // React state updates are asynchronous; block an immediate repeated submit too.
-    if (publishing.current) return;
-    publishing.current = true;
-    setBusy(true);
-    setStatus('');
+export function PostForm({questionId,tipId,tip=false}:{questionId?:string;tipId?:string;tip?:boolean}) {
+  const parentId = questionId || tipId, collection = tip || tipId ? 'tips' : 'questions';
+  const [status,setStatus] = useState(''), [busy,setBusy] = useState(false);
+  const pending = useRef(false), publisher = useRef(createPostPublisher());
+  async function submit(event:React.FormEvent<HTMLFormElement>) {
+    event.preventDefault(); if (pending.current) return;
+    pending.current = true; setBusy(true); setStatus('');
     const data = new FormData(event.currentTarget);
-    const payload = {
-      body: data.get('body'),
-      author_label: data.get('author_label') || 'dot',
-      ...(!questionId ? {
-        title: data.get('title'),
-        tags: String(data.get('tags') || '').split(',').map(tag => tag.trim()).filter(Boolean),
-      } : {}),
-    };
-    publisher.current ??= createPostPublisher();
+    const payload = {body:data.get('body'),author_label:data.get('author_label') || 'dot',
+      ...(!parentId ? {title:data.get('title'),tags:String(data.get('tags') || '').split(',').map(t => t.trim()).filter(Boolean)} : {})};
     try {
-      const result = await publisher.current.publish(
-        questionId ? `/api/v1/questions/${questionId}/answers` : '/api/v1/questions',
-        payload,
-      );
-      location.href = questionId
-        ? `/questions/${questionId}#${result.id}`
-        : `/questions/${result.id}`;
-      if (questionId) location.reload();
+      const result = await publisher.current.publish(parentId ? `/api/v1/${collection}/${parentId}/${tipId ? 'replies' : 'answers'}` : `/api/v1/${collection}`,payload);
+      location.href = parentId ? `/${collection}/${parentId}#${result.id}` : `/${collection}/${result.id}`;
+      if (parentId) location.reload();
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Could not publish. Your draft is still here.');
-      publishing.current = false;
-      setBusy(false);
+      setStatus(error instanceof Error ? error.message : 'Could not publish. Your draft is still here.'); pending.current = false; setBusy(false);
     }
   }
-
   return <form className="post-form" onSubmit={submit}>
-    {!questionId && <label>Question title
-      <input name="title" required minLength={8} maxLength={160} placeholder="What are you trying to solve?" />
-    </label>}
-    <label>{questionId ? 'Your answer' : 'Details'}
-      <textarea name="body" required minLength={10} maxLength={10000} rows={questionId ? 6 : 7}
-        placeholder={questionId ? 'Share a reproducible solution. Include sources when useful.' : 'Describe the problem, what you tried, and what happened.'} />
+    {!parentId && <label>{tip ? 'Tip title' : 'Question title'}<input name="title" required minLength={8} maxLength={160} placeholder={tip ? 'What useful trick have you learned?' : 'What are you trying to solve?'}/></label>}
+    <label>{tipId ? 'Your reply' : questionId ? 'Your answer' : 'Details'}
+      <textarea name="body" required minLength={10} maxLength={10000} rows={parentId ? 6 : 7} placeholder={tipId ? 'Share a helpful reply or your experience with this tip.' : questionId ? 'Share a reproducible solution. Include sources when useful.' : tip ? 'Share steps, examples, and when this tip is useful.' : 'Describe the problem, what you tried, and what happened.'}/>
     </label>
-    <div className="form-row">
-      <label>Public author label<input name="author_label" maxLength={40} placeholder="dot" /></label>
-      {!questionId && <label>Tags <span className="optional">optional</span><input name="tags" placeholder="api, debugging" /></label>}
+    <div className="form-row"><label>Public author label<input name="author_label" maxLength={40} placeholder="dot"/></label>
+      {!parentId && <label>Tags <span className="optional">optional</span><input name="tags" maxLength={124} placeholder="api, debugging"/></label>}
     </div>
     <p className="fine">Everything you publish is public. Keep private data, secrets, personal information, and conversation logs out. Author labels are self-declared.</p>
-    <button disabled={busy} type="submit">{busy ? 'Publishing…' : questionId ? 'Publish answer' : 'Publish question'}</button>
+    <button disabled={busy} type="submit">{busy ? 'Publishing…' : tipId ? 'Publish reply' : questionId ? 'Publish answer' : tip ? 'Publish tip' : 'Publish question'}</button>
     {status && <p className="error" role="alert">{status}</p>}
   </form>;
+}
+export function UpdateForm({id}:{id:string}) {
+  const publisher = useRef(createPostPublisher()), pending = useRef(false);
+  const [busy,setBusy] = useState(false), [status,setStatus] = useState('');
+  async function submit(event:React.FormEvent<HTMLFormElement>) {
+    event.preventDefault(); if (pending.current) return;
+    pending.current = true; setBusy(true); setStatus('');
+    const body = new FormData(event.currentTarget).get('body');
+    try { await publisher.current.publish(`/api/v1/posts/${id}/updates`,{body}); location.reload(); }
+    catch (error) { setStatus(error instanceof Error ? error.message : 'Could not append update. Your draft is still here.'); pending.current = false; setBusy(false); }
+  }
+  return <details className="update-control"><summary>Append a dated update</summary><form className="post-form" onSubmit={submit}>
+    <p className="fine">The original post and earlier updates stay as published. This update is public.</p>
+    <label>Update<textarea name="body" required minLength={10} maxLength={10000} rows={4}/></label>
+    <button disabled={busy}>{busy ? 'Publishing…' : 'Publish update'}</button>
+    {status && <p className="error" role="alert">{status}</p>}
+  </form></details>;
+}
+export function MutationButton({endpoint,payload,label,method='POST',redirect}:{endpoint:string;payload:Record<string,unknown>;label:string;method?:'POST'|'DELETE';redirect?:string}) {
+  const publisher = useRef(createPostPublisher()), pending = useRef(false);
+  const [busy,setBusy] = useState(false), [error,setError] = useState('');
+  async function act() {
+    if (pending.current) return; pending.current = true; setBusy(true); setError('');
+    try { await publisher.current.publish(endpoint,payload,method); if (redirect) location.href = redirect; else location.reload(); }
+    catch (error) { setError(error instanceof Error ? error.message : 'Could not save. Please retry.'); pending.current = false; setBusy(false); }
+  }
+  return <div className="mutation"><button type="button" className="secondary" disabled={busy} onClick={act}>{busy ? 'Saving…' : label}</button>{error && <p className="error" role="alert">{error}</p>}</div>;
 }

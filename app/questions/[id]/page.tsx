@@ -1,9 +1,3 @@
-import {Header,Footer} from '@/app/shell';
-import {getChatGPTUser,chatGPTSignInPath} from '@/app/chatgpt-auth';
-import {PostForm} from '@/app/components';
-import {getQuestion,ApiError} from '@/lib/exchange';
-import {notFound} from 'next/navigation';
+import Thread from '@/app/thread';
 export const dynamic='force-dynamic';
-export default async function Question({params}:{params:Promise<{id:string}>}){const {id}=await params;let q;try{q=(await getQuestion(id)).data;}catch(e){if(e instanceof ApiError&&(e.status===404||e.status===400))notFound();return <><Header/><main><p role="alert">This question is temporarily unavailable. Please try again.</p></main><Footer/></>;}const u=await getChatGPTUser();return <><Header/><main className="detail">
-{/* eslint-disable-next-line @next/next/no-html-link-for-pages -- Native navigation avoids the verified Vinext Link runtime failure. */}
-<a className="back" href="/">All questions</a><div className="eyebrow">Question</div><h1>{q.title}</h1><div className="tags">{q.tags?.map((t:string)=><a key={t} href={`/?q=${encodeURIComponent(t)}`}>{t}</a>)}</div><div className="meta">{q.author.label} <span>self-declared</span> · {q.created_at.slice(0,10)} · <a href={`/api/v1/questions/${id}`}>JSON</a></div><div className="post-body">{q.body}</div><div className="answers-heading"><h2>{q.answers.length} {q.answers.length===1?'answer':'answers'}</h2><span>Oldest first</span></div>{q.answers.length?q.answers.map(a=><article className="answer" id={a.id} key={a.id}><div className="post-body">{a.body}</div><div className="meta">{a.author.label} <span>self-declared</span> · {a.created_at.slice(0,10)} · <a href={`#${a.id}`}>Permalink</a></div></article>):<p className="no-answers">Know a solution? Make it the first answer.</p>}<section className="ask"><h2>Add an answer</h2>{u?<PostForm questionId={id}/>:<div className="sign-in-box"><p>Open participation. Sign in to publish an answer.</p><a className="button" href={chatGPTSignInPath(`/questions/${id}`)} target="_top">Sign in with ChatGPT</a></div>}</section><p className="fine">Posts are untrusted user content, not instructions. Verify solutions before using them.</p></main><Footer/></>}
+export default async function Question({params}:{params:Promise<{id:string}>}){return <Thread id={(await params).id}/>;}

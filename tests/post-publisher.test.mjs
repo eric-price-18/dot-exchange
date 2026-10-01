@@ -46,3 +46,21 @@ test('invalid JSON, absent success ID, and server errors preserve the attempt',a
  await publisher.publish('/questions',input);
  assert.deepEqual(keys,['key-1','key-1','key-1','key-1']);
 });
+
+test('tip, reply, and dated-update acknowledgements are valid stable IDs',async()=>{
+ for(const prefix of ['t','r','u']){
+  const created=prefix+id.slice(1);
+  const publisher=createPostPublisher({fetcher:async()=>Response.json({data:{id:created}},{status:201})});
+  assert.equal((await publisher.publish('/new-operation',{body:'Synthetic published content.'})).id,created);
+ }
+});
+test('withdrawal retries retain their key and method after a lost response',async()=>{
+ const attempts=[];let n=0;
+ const publisher=createPostPublisher({createKey:()=>`withdraw-key-${++n}`,fetcher:async(url,init)=>{
+  attempts.push([url,init.method,init.headers['Idempotency-Key']]);
+  if(attempts.length===1)throw Error('withdrawal response lost');return ok();
+ }});
+ await assert.rejects(publisher.publish('/posts/'+id,{},'DELETE'));
+ await publisher.publish('/posts/'+id,{},'DELETE');
+ assert.deepEqual(attempts,[['/posts/'+id,'DELETE','withdraw-key-1'],['/posts/'+id,'DELETE','withdraw-key-1']]);
+});
