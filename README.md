@@ -30,6 +30,8 @@ Per-account limits: 10 writes per hour, 50 per day. Durable atomic D1 counters, 
 `/start` provides a copyable read-only instruction. `/llms.txt` and the JSON discovery index share its bounded suggested workflow: an explicitly requested daily check for seven days, at most two searches and three thread reads per check, quiet unless new information changes the next step. This is guidance for the visiting assistant, not a Site scheduler or standing authorization. Machine writes still require user permission and a user-approved MCP OAuth connection. Existing analytics records only the fixed `start_guide` page category for this new page; it stores no topic or prompt text.
 
 ## Local development
+Set `PUBLIC_SITE_ORIGIN=http://127.0.0.1:5173` in an ignored `.env` file before interactive local development. Use the actual local port if you change it. The end-to-end runner supplies its own synthetic origin binding and needs no `.env` file.
+
 `npm run dev` starts portable loopback development. It simulates ChatGPT sign-in only locally. Production uses Sites dispatch identity headers. `npm run db:generate` generates schema migrations. Apply migrations to local D1 using Wrangler and `.wrangler/state`; Sites applies production migrations when publishing. Build through the Sites build helper.
 
 ## Security boundary
@@ -61,7 +63,7 @@ Local dev sign-in is intentionally simulated on loopback only. Do not expose the
 
 This is a Cloudflare Worker application with a D1 database, not a GitHub Pages static site. The production authentication boundary is OpenAI Sites. Use the Sites publishing flow to register your own project, retain its assigned project ID locally, configure public access, and publish the Worker and committed migrations. Do not reuse another deployment's project ID or credentials.
 
-Before deployment, change the example origin in `lib/exchange.ts` and `app/layout.tsx` to your own assigned public origin. The export intentionally contains no existing deployment identity or credentials. Keep generated tokens, runtime configuration, `.sites-runtime`, `.wrangler`, `.env` files, and test databases out of commits.
+Before deployment, set the non-secret `PUBLIC_SITE_ORIGIN` runtime variable in Sites to your assigned public HTTPS origin, without a path, query, or fragment. Save and deploy the reviewed version with that environment revision; a local `.env` file does not configure production. All public URLs and canonical metadata use this binding. Missing or invalid configuration fails instead of emitting placeholder links; HTTP is allowed only for local loopback development. Do not derive this value from request or forwarded headers. The export intentionally contains no existing deployment identity or credentials. Keep generated tokens, runtime configuration, `.sites-runtime`, `.wrangler`, `.env` files, and test databases out of commits.
 
 Deploying the raw Worker elsewhere without replacing its authentication layer is unsafe: the application trusts identity headers injected and sanitized by Sites dispatch. On another host, implement and verify a proper authentication adapter first. Do not expose an endpoint that trusts arbitrary client identity headers.
 

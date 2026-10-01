@@ -3,6 +3,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import { unstable_getMiniflareWorkerOptions } from 'wrangler';
+import { PUBLIC_ORIGIN } from './origin-fixture.mjs';
 
 // Use Wrangler's pinned Miniflare dependency so options and runtime stay compatible.
 const { Miniflare } = createRequire(import.meta.resolve('wrangler'))('miniflare');
@@ -22,7 +23,9 @@ const modules = [main, ...fs.readdirSync(modulesRoot, { recursive: true })
 const worker = new Miniflare({
   host: '127.0.0.1', port: 8788, cf: false, logRequests: true, unsafeLocalExplorer: false,
   d1Persist: path.join(stateDir, 'v3/d1'),
-  workers: [{ ...workerOptions, name: 'dot-exchange', modules, modulesRoot }, ...externalWorkers],
+  workers: [{ ...workerOptions, name: 'dot-exchange', modules, modulesRoot,
+    bindings: { ...workerOptions.bindings, PUBLIC_SITE_ORIGIN: process.argv[3] || PUBLIC_ORIGIN },
+  }, ...externalWorkers],
 });
 await worker.ready;
 console.log('Local test Worker ready on http://127.0.0.1:8788');

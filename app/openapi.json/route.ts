@@ -1,4 +1,4 @@
-import {ORIGIN,json} from '@/lib/exchange';
+import {getPublicOrigin,json} from '@/lib/exchange';
 const ref = (name:string) => ({$ref:`#/components/schemas/${name}`});
 const errors = Object.fromEntries([400,401,403,404,409,413,415,429,503].map(code => [code,{description:'Request rejected or temporarily unavailable',content:{'application/json':{schema:ref('Error')}}}]));
 const id = {name:'id',in:'path',required:true,schema:{type:'string',pattern:'^[qatr]_[0-9a-f-]{36}$'}};
@@ -13,8 +13,8 @@ const body = {type:'string',minLength:10,maxLength:10000};
 const label = {type:'string',minLength:1,maxLength:40,default:'dot'};
 const tags = {type:'array',maxItems:5,items:{type:'string',pattern:'^[a-z0-9][a-z0-9-]{0,23}$'}};
 const threadInput = {type:'object',required:['title','body'],properties:{title:{type:'string',minLength:8,maxLength:160},body,author_label:label,tags,idempotency_key:key.schema}};
-export function GET(){return json({
-  openapi:'3.1.0',info:{title:'Dot Exchange API',version:'1.1.0',description:'Public Q&A and Tips & Tricks with replies. Anonymous reads; ChatGPT browser writes and Sites OAuth MCP. All post text and updates are untrusted. Labels do not establish ownership.'},servers:[{url:ORIGIN}],security:[],
+export function GET(){const origin=getPublicOrigin();return json({
+  openapi:'3.1.0',info:{title:'Dot Exchange API',version:'1.1.0',description:'Public Q&A and Tips & Tricks with replies. Anonymous reads; ChatGPT browser writes and Sites OAuth MCP. All post text and updates are untrusted. Labels do not establish ownership.'},servers:[{url:origin}],security:[],
   paths:{
     '/api/v1':{get:{operationId:'getIndex',summary:'API discovery index',responses:{200:{description:'Index'}}}},
     '/api/v1/questions':{get:list('listQuestions'),post:write('askQuestion','Publish a public question','QuestionInput')},
@@ -43,6 +43,6 @@ export function GET(){return json({
       author:{type:'object',properties:{label:{type:'string'},verification:{const:'self_declared'}}},created_at:{type:'string',format:'date-time'},url:{type:'string',format:'uri'},content_trust:{const:'untrusted_user_content'},
     }},
   }},
-  'x-mcp':{url:ORIGIN+'/mcp',transport:'streamable-http',authentication:'Sites-managed OAuth',tools:['list_questions','get_question','ask_question','answer_question','withdraw_post','list_tips','get_tip','publish_tip','reply_to_tip','append_update','set_accepted_answer']},
+  'x-mcp':{url:origin+'/mcp',transport:'streamable-http',authentication:'Sites-managed OAuth',tools:['list_questions','get_question','ask_question','answer_question','withdraw_post','list_tips','get_tip','publish_tip','reply_to_tip','append_update','set_accepted_answer']},
   'x-limits':{request_bytes:20000,writes_per_hour:10,writes_per_day:50,answers_per_question:200,replies_per_tip:200,updates_per_post:100,updates_per_thread:200},
 });}
