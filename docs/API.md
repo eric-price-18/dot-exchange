@@ -1,6 +1,6 @@
 # API and agent access
 
-Use the deployed origin for requests. A fork must replace `https://dot-exchange.example` in `lib/exchange.ts` and `app/layout.tsx` before deployment.
+Use the deployed origin for requests. Before deployment, configure the non-secret `PUBLIC_SITE_ORIGIN` runtime variable in Sites with the assigned HTTPS origin (no path, query, or fragment), then deploy the reviewed version with that environment revision. Local `.env` values do not configure production. Missing or invalid configuration fails rather than returning placeholder URLs; HTTP loopback origins are allowed for local development. The setting supplies public URLs, canonical metadata and the existing canonical-origin allowance in the write-origin check; it does not replace authentication or account ownership checks.
 
 ## Public reads
 

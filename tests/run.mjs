@@ -4,6 +4,7 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { createHash } from 'node:crypto';
+import { CHANGED_PUBLIC_ORIGIN } from './origin-fixture.mjs';
 // Tests use a fresh local-only D1 directory, never production or a developer's data.
 fs.mkdirSync('.sites-runtime',{recursive:true});
 const stateDir=fs.mkdtempSync(path.resolve('.sites-runtime/test-db-'));
@@ -26,7 +27,7 @@ function localQuery(sql){
 }
 function analyticsTotals(){return Object.fromEntries(localQuery('SELECT metric,SUM(count) AS n FROM analytics_daily GROUP BY metric').map(r=>[r.metric,r.n]));}
 const log=fs.openSync('.sites-runtime/e2e-server.log','w');
-function launch(){return spawn(process.execPath,['tests/worker.mjs',stateDir],{detached:process.platform!=='win32',env,stdio:['ignore',log,log,'ipc']});}
+function launch(origin){return spawn(process.execPath,['tests/worker.mjs',stateDir,...(origin?[origin]:[])],{detached:process.platform!=='win32',env,stdio:['ignore',log,log,'ipc']});}
 async function ready(p){for(let n=0;n<60;n++){if(p.exitCode!==null||p.signalCode!==null)throw Error('Local test Worker exited before readiness; see .sites-runtime/e2e-server.log');try{const r=await checkedFetch('http://127.0.0.1:8788/api/v1/questions');const ok=r.ok;await r.text();if(ok)return;}catch{}await new Promise(r=>setTimeout(r,500));}throw Error('Local server not ready; see .sites-runtime/e2e-server.log');}
 async function stop(p){
  if(p.exitCode!==null||p.signalCode!==null)return;
@@ -60,6 +61,7 @@ try{
  await import('./read-surfaces.mjs');
  await import('./api.mjs');
  await import('./enhancements.mjs');
+ await import('./origin-regression.mjs');
  // Allow Worker waitUntil tasks to finish before inspecting local-only aggregates.
  await new Promise(r=>setTimeout(r,200));
  await stop(server);
@@ -78,7 +80,20 @@ try{
  for(const prohibited of ['Synthetic','example.test','local-e2e','UI lost','qa-test','durability','q_','a_'])assert.ok(!snapshot.includes(prohibited),'Analytics must not contain '+prohibited);
  assert.equal(localQuery("SELECT COUNT(*) AS n FROM analytics_daily WHERE day='2000-01-01'")[0].n,0,'Expired aggregates pruned');
  console.log('PASS: aggregate counts, privacy, MCP semantic outcomes, exclusions, no public analytics endpoints, and retention on local D1.');
- server=launch();await ready(server);
+ server=launch(CHANGED_PUBLIC_ORIGIN);await ready(server);
+ // The same build and stored posts use the new runtime origin after restart.
+ const originFixture=JSON.parse(fs.readFileSync('.sites-runtime/origin-durability.json','utf8'));
+ const smoke={'User-Agent':'DotExchangeSmokeTest/1.0'};
+ for(const [kind,post] of [['questions',originFixture.question],['tips',originFixture.tip]]){
+  const response=await checkedFetch('http://127.0.0.1:8788/api/v1/'+kind+'/'+post.id,{headers:smoke});
+  assert.equal(response.status,200);const detail=await response.json();
+  assert.equal(new URL(detail.data.url).origin,CHANGED_PUBLIC_ORIGIN);
+  for(const child of detail.data.answers||detail.data.replies)assert.equal(new URL(child.url).origin,CHANGED_PUBLIC_ORIGIN);
+ }
+ const replayResponse=await checkedFetch('http://127.0.0.1:8788/api/v1/questions',{method:'POST',headers:{...smoke,...originFixture.actor,'Content-Type':'application/json','Idempotency-Key':'origin-question'},body:JSON.stringify(originFixture.payload)});
+ assert.equal(replayResponse.status,201);const replay=await replayResponse.json();
+ assert.equal(replay.replayed,true);assert.equal(replay.data.id,originFixture.question.id);assert.equal(new URL(replay.data.url).origin,CHANGED_PUBLIC_ORIGIN);
+ console.log('PASS: runtime origin changes without rebuilding, migrating data or stale idempotent URLs.');
  const enhanced=JSON.parse(fs.readFileSync('.sites-runtime/enhancement-durability.json','utf8'));
  const enhancedQuestion=await (await checkedFetch('http://127.0.0.1:8788/api/v1/questions/'+enhanced.question_id,{headers:{'User-Agent':'DotExchangeSmokeTest/1.0'}})).json();
  assert.equal(enhancedQuestion.data.body,enhanced.original);assert.equal(enhancedQuestion.data.updates.length,2);assert.equal(enhancedQuestion.data.accepted_answer_id,enhanced.accepted_answer_id);assert.equal(enhancedQuestion.data.resolved,true);
