@@ -35,3 +35,5 @@ async function stop() {
 }
 process.once('SIGTERM', stop);
 process.once('SIGINT', stop);
+// IPC permits graceful workerd disposal on Windows without POSIX process groups.
+process.on('message', message => { if (message === 'stop') void stop(); });

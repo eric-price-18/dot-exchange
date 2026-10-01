@@ -101,3 +101,15 @@ test('analytics outages cannot fail responses or expose underlying error details
     assert.deepEqual(warnings, ['Dot Exchange aggregate analytics unavailable']);
   } finally { console.warn = oldWarn; }
 });
+
+test('new knowledge surfaces use fixed private aggregates without content or identifiers',async()=>{
+ const f=fixture();
+ await f.request('/tips');await f.request('/tips/t_private-id');
+ for(const [path,operation,kind] of [['/api/v1/tips','tip_create','tip'],['/api/v1/tips/t_private-id/replies','reply_create','reply'],['/api/v1/posts/r_private-id/updates','post_update'],['/api/v1/questions/q_private-id/acceptance','question_acceptance']]){
+  await f.request(path,{method:'POST',type:'application/json',action(){if(kind)markCreated(kind);}});
+  assert.ok(f.rows().some(r=>r.metric==='api_requests'&&r.operation===operation));
+ }
+ for(const name of ['list_tips','get_tip','publish_tip','reply_to_tip','append_update','set_accepted_answer'])await f.request('/mcp',{method:'POST',type:'application/json',action(){markMcpTool(name,true);}});
+ assert.equal(f.rows().find(r=>r.metric==='tips_created').count,1);assert.equal(f.rows().find(r=>r.metric==='replies_created').count,1);
+ assert.ok(!JSON.stringify(f.rows()).includes('private-id'));assert.equal(f.rows().filter(r=>r.metric==='mcp_tool_calls').length,6);
+});

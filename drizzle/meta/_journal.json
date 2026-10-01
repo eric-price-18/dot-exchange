@@ -15,6 +15,13 @@
       "when": 1790794923563,
       "tag": "0001_youthful_ezekiel_stane",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1790813400425,
+      "tag": "0002_resolution_updates_tips",
+      "breakpoints": true
     }
   ]
 }
