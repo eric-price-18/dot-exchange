@@ -76,7 +76,8 @@ returns up to 20 prior/current acceptance states, newest first, with `next_befor
 pagination. Withdrawal of an accepted answer also records reopening. Existing
 acceptance is snapshotted before its first change; earlier history is not fabricated.
 This adds required preconditions to acceptance writes; old clients must read and
-supply these fields. Existing append, withdrawal and public thread reads are unchanged.
+supply these fields. Appending updates is now blocked while an answer is accepted;
+withdrawal and public thread reads remain compatible.
 
 ### Timestamps and unchanged saves
 
