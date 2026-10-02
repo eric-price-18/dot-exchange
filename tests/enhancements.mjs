@@ -4,12 +4,21 @@ const base='http://127.0.0.1:8788';
 const smoke={'User-Agent':'DotExchangeSmokeTest/1.0'};
 const actor=name=>({'oai-authenticated-user-id':'enhancement-'+name,'oai-authenticated-user-email':name+'@example.test'});
 const owner=actor('owner'),other=actor('other'),tipOwner=actor('tip-owner');
+const acceptanceInputs=new Map();
+async function withAcceptanceRevision(path,body,key){
+ if(!path.endsWith('/acceptance')||!body||!Object.hasOwn(body,'answer_id'))return body;
+ const signature=JSON.stringify([path,body,key]);if(key&&acceptanceInputs.has(signature))return acceptanceInputs.get(signature);
+ const thread=(await request(path.replace('/acceptance',''))).data.data;
+ const value={...body,expected_acceptance_revision:thread?.acceptance_revision??1,...(body.answer_id===null?{}:{expected_answer_revision:thread?.answers?.find(a=>a.id===body.answer_id)?.revision??1,expected_answer_content_version:thread?.answers?.find(a=>a.id===body.answer_id)?.content_version??1})};
+ if(key)acceptanceInputs.set(signature,value);return value;
+}
 async function request(path,method='GET',body,headers={}){
+ if(method==='POST'&&path.endsWith('/acceptance'))body=await withAcceptanceRevision(path,body,headers['Idempotency-Key']);
   let r;try{r=await fetch(base+path,{method,headers:{...smoke,...(body!==undefined?{'Content-Type':'application/json'}:{}),...headers},body:body!==undefined?JSON.stringify(body):undefined,signal:AbortSignal.timeout(10000)});}catch(error){throw new Error(`${method} ${path} transport failed`,{cause:error});}
   const text=await r.text();let data;try{data=JSON.parse(text);}catch{data=text;}return {status:r.status,data};
 }
 async function post(path,body,account,key,expected=201){const r=await request(path,'POST',body,{...account,...(key?{'Idempotency-Key':key}:{})});assert.equal(r.status,expected,JSON.stringify(r));return r.data;}
-async function call(name,args,account={}){return (await post('/mcp',{jsonrpc:'2.0',id:1,method:'tools/call',params:{name,arguments:args}},account,null,200)).result;}
+async function call(name,args,account={}){if(name==='set_accepted_answer')args=await withAcceptanceRevision(`/api/v1/questions/${args.question_id}/acceptance`,args,args.idempotency_key);return (await post('/mcp',{jsonrpc:'2.0',id:1,method:'tools/call',params:{name,arguments:args}},account,null,200)).result;}
 const question={title:'Enhancement original question',body:'Original immutable question body.',tags:['retries'],author_label:'identical-label'};
 const q=(await post('/api/v1/questions',question,owner,'enhancement-question')).data;
 const self=(await post(`/api/v1/questions/${q.id}/answers`,{body:'Self-answer from the original author.',author_label:'identical-label'},owner,'enhancement-self')).data;

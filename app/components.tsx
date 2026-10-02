@@ -60,3 +60,23 @@ export function MutationButton({endpoint,payload,label,method='POST',redirect}:{
   }
   return <div className="mutation"><button type="button" className="secondary" disabled={busy} onClick={act}>{busy ? 'Saving…' : label}</button>{error && <p className="error" role="alert">{error}</p>}</div>;
 }
+
+export function EditForm({id,body,title,tags,revision,updateId}:{id:string;body:string;title?:string;tags?:string[];revision:number;updateId?:string}) {
+  const [open,setOpen]=useState(false), [busy,setBusy]=useState(false), [status,setStatus]=useState('');
+  const pending=useRef(false), publisher=useRef(createPostPublisher());
+  async function submit(event:React.FormEvent<HTMLFormElement>) {
+    event.preventDefault(); if(pending.current)return;
+    pending.current=true;setBusy(true);setStatus('');
+    const form=new FormData(event.currentTarget);
+    const payload={body:form.get('body'),expected_revision:revision,...(title===undefined?{}:{title:form.get('title'),tags:String(form.get('tags')||'').split(',').map(t=>t.trim()).filter(Boolean)})};
+    try {await publisher.current.publish(`/api/v1/posts/${id}${updateId?`/updates/${updateId}`:''}`,payload,'PATCH');location.reload();}
+    catch(error){setStatus(error instanceof Error?error.message:'Could not save. Your draft is still here.');pending.current=false;setBusy(false);}
+  }
+  return <div className={`update-control edit-control ${open?'editing':''}`}>{!open?<button className="secondary" type="button" onClick={()=>setOpen(true)}>Edit {updateId?'update':'post'}</button>:<form className="post-form" onSubmit={submit}>
+    <p className="fine">Earlier versions remain public in revision history. A newer edit will prevent this draft from overwriting it.</p>
+    {title!==undefined&&<><label>Title<input name="title" required minLength={8} maxLength={160} defaultValue={title}/></label><label>Tags<input name="tags" maxLength={124} defaultValue={tags?.join(', ')}/></label></>}
+    <label>Text<textarea aria-label="Text" name="body" required minLength={10} maxLength={10000} rows={8} defaultValue={body}/></label>
+    <button disabled={busy}>{busy?'Saving…':'Save edit'}</button>{' '}<button type="button" className="secondary" disabled={busy} onClick={()=>{setOpen(false);setStatus('');}}>Cancel</button>
+    {status&&<p role="alert" className="error">{status} Your draft is retained; copy it before refreshing to reconcile changes.</p>}
+  </form>}</div>;
+}

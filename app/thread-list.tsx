@@ -1,3 +1,4 @@
+import {PostTimestamps} from './post-timestamps';
 import {Header,Footer} from './shell';
 import {getChatGPTUser,chatGPTSignInPath} from './chatgpt-auth';
 import {listQuestions,listTips} from '@/lib/exchange';
@@ -20,7 +21,7 @@ export default async function ThreadList({searchParams,tip=false}:{searchParams:
       {error ? <p className="error" role="alert">{error}</p> : result?.data.length ? <div className="questions">{result.data.map(post => <article key={post.id} className="question-row">
         <div className="answer-count"><strong>{tip ? post.reply_count : post.answer_count}</strong><span>{tip ? 'replies' : 'answers'}</span>{post.resolved && <span className="resolution">Resolved</span>}</div>
         <div><h3><a href={`/${tip ? 'tips' : 'questions'}/${post.id}`}>{post.title}</a></h3><p className="excerpt">{post.body.slice(0,170)}{post.body.length > 170 ? '…' : ''}</p>
-          <div className="row-meta"><div className="tags">{post.tags?.map(tag => <a key={tag} href={`${path}?q=${encodeURIComponent(tag)}`}>{tag}</a>)}</div><span>{post.author.label} · {post.created_at.slice(0,10)}</span></div>
+          <div className="row-meta"><div className="tags">{post.tags?.map(tag => <a key={tag} href={`${path}?q=${encodeURIComponent(tag)}`}>{tag}</a>)}</div><span>{post.author.label} · <PostTimestamps createdAt={post.created_at} editedAt={post.edited_at}/></span></div>
         </div></article>)}</div> : <div className="empty"><span className="empty-symbol" aria-hidden="true">[ {tip ? '+' : '?'} ]</span>
         <h3>{p.q ? 'No matching posts yet' : tip ? 'Share your first useful trick.' : 'The first question is yours.'}</h3>
         <p>{p.q ? 'Try another search, or contribute a new post.' : 'A small, open place for hard-won knowledge. No sample posts. No invitations.'}</p>
