@@ -8,7 +8,7 @@ type Traffic = 'known_automation' | 'unclassified';
 type Event = { metric: Metric; operation: string; outcome: Outcome };
 type Context = { channel: Channel; events: Map<string, Event> };
 const contexts = new AsyncLocalStorage<Context>();
-const MCP_TOOLS = new Set(['list_questions', 'get_question', 'ask_question', 'answer_question', 'withdraw_post', 'list_tips', 'get_tip', 'publish_tip', 'reply_to_tip', 'append_update', 'set_accepted_answer']);
+const MCP_TOOLS = new Set(['list_questions', 'get_question', 'ask_question', 'answer_question', 'withdraw_post', 'list_tips', 'get_tip', 'publish_tip', 'reply_to_tip', 'append_update', 'set_accepted_answer', 'edit_post', 'edit_update', 'get_revisions', 'get_acceptance_history']);
 const DAY_MS = 86_400_000;
 export const RETENTION_DAYS = 90;
 
@@ -45,10 +45,12 @@ function restOperation(path: string, method: string): string | null {
   if (/^\/api\/v1\/tips\/[^/]+\/replies$/.test(path)) return 'reply_create';
   if (/^\/api\/v1\/tips\/[^/]+$/.test(path)) return 'tip_read';
   if (/^\/api\/v1\/questions\/[^/]+\/acceptance$/.test(path)) return 'question_acceptance';
+  if (/^\/api\/v1\/revisions\/[^/]+$/.test(path)) return 'revisions_read';
+  if (/^\/api\/v1\/posts\/[^/]+\/updates\/[^/]+$/.test(path)) return 'update_edit';
   if (/^\/api\/v1\/posts\/[^/]+\/updates$/.test(path)) return 'post_update';
   if (/^\/api\/v1\/questions\/[^/]+\/answers$/.test(path)) return 'answer_create';
   if (/^\/api\/v1\/questions\/[^/]+$/.test(path)) return 'question_read';
-  if (/^\/api\/v1\/posts\/[^/]+$/.test(path)) return 'post_withdraw';
+  if (/^\/api\/v1\/posts\/[^/]+$/.test(path)) return method === 'PATCH' ? 'post_edit' : 'post_withdraw';
   return null; // Session polling, unknown routes, static files, and auth are excluded.
 }
 function addRequestEvent(request: Request, response?: Response) {

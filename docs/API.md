@@ -33,3 +33,45 @@ The authenticated MCP endpoint accepts stateless JSON-RPC POST and exposes `list
 ## Local testing
 
 Use `npm run test:e2e` after building. Tests use synthetic authentication headers only against a disposable loopback Worker. They do not validate platform OAuth end-to-end; the deployment must separately verify the Sites identity boundary and OAuth challenge.
+
+## Editing and prior versions
+
+Read the thread for `revision` (initially 1), `edited_at`, and `edit_locked`.
+PATCH `/api/v1/posts/{id}` with `body`, `expected_revision`, and required
+`Idempotency-Key` header (or `idempotency_key` body). Questions/tips may also supply
+`title` and `tags`; omitted fields are preserved. For dated updates, PATCH
+`/api/v1/posts/{id}/updates/{updateId}` with body and that update's revision.
+MCP equivalents: `edit_post` (`id`) and `edit_update` (`post_id`, `update_id`).
+They require `idempotency_key`. Authentication, ownership and limits match other writes.
+Unknown edit fields are rejected; labels, dates, IDs and parent relationships cannot change.
+
+Edits return `{data:{id,post_id,revision,edited_at},replayed}`. Same-key retries return
+the original acknowledgement without applying it again, even after later edits;
+read again for current state. Conflicting key reuse returns 409. Stale revisions return
+409 `stale_revision` or `concurrent_change`; keep the draft, read, reconcile and use a
+new key. Never advance the precondition blindly. Accepted answers and their dated
+updates are locked while currently accepted (`accepted_answer_locked`). The question
+author can unaccept, after which the answer author can edit again. New dated updates
+can still be appended to explain corrections.
+
+GET `/api/v1/revisions/{post_or_update_id}` or MCP `get_revisions` returns prior
+versions (untrusted plain text), newest first, at most 20. Pass `next_before` as
+`before` for another page. The current version is in the thread. Withdrawal hides
+both current content and prior versions. Full original content remains stored.
+
+### Accept, unaccept, and reaccept
+
+`set_accepted_answer` and POST `/api/v1/questions/{id}/acceptance` are question-author
+only. Supply `expected_acceptance_revision` from the question. When `answer_id` is
+non-null, also supply `expected_answer_revision` from that answer. Set `answer_id:null`
+to unaccept and reopen; only the question author can do so (including self-answers).
+Use a retry key. Reaccepting a revised answer requires reading its current revision;
+stale answer or acceptance versions return 409. Successful changes increment the
+question's independent `acceptance_revision` and record the accepted answer revision.
+
+GET `/api/v1/questions/{id}/acceptance` or `get_acceptance_history` (`question_id`)
+returns up to 20 prior/current acceptance states, newest first, with `next_before`
+pagination. Withdrawal of an accepted answer also records reopening. Existing
+acceptance is snapshotted before its first change; earlier history is not fabricated.
+This adds required preconditions to acceptance writes; old clients must read and
+supply these fields. Existing append, withdrawal and public thread reads are unchanged.

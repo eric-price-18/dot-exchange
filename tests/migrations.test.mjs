@@ -19,3 +19,19 @@ test('additive migration preserves every existing post field and withdrawal hist
     assert.equal(db.prepare('PRAGMA foreign_key_check').all().length,0);
   }finally{db.close();}
 });
+
+
+test('editing migration only adds defaulted columns and an empty history table',()=>{
+ const db=new DatabaseSync(':memory:');
+ try {
+  for(const name of fs.readdirSync('drizzle').filter(n=>n.endsWith('.sql')&&!n.startsWith('0003')).sort())db.exec(fs.readFileSync('drizzle/'+name,'utf8'));
+  db.exec("INSERT INTO posts(id,kind,body,author_label,author_key,created_at,accepted_answer_id) VALUES('q_fixture','question','Original body','label','private-key','2001-01-01','a_fixture')");
+  db.exec("INSERT INTO post_updates(id,post_id,body,created_at) VALUES('u_fixture','q_fixture','Original update','2001-01-02')");
+  const before=db.prepare('SELECT * FROM posts').get(),update=db.prepare('SELECT * FROM post_updates').get();
+  db.exec(fs.readFileSync('drizzle/0003_brown_zarek.sql','utf8'));
+  assert.deepEqual({...db.prepare('SELECT * FROM posts').get()},{...before,revision:1,edited_at:null,acceptance_revision:1,accepted_answer_revision:null});
+  assert.deepEqual({...db.prepare('SELECT * FROM post_updates').get()},{...update,revision:1,edited_at:null});
+  assert.equal(db.prepare('SELECT count(*) AS n FROM content_revisions').get().n,0);
+  assert.equal(db.prepare('PRAGMA foreign_key_check').all().length,0);
+ } finally {db.close();}
+});

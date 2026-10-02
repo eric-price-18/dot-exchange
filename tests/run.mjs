@@ -62,6 +62,8 @@ try{
  await import('./api.mjs');
  await import('./enhancements.mjs');
  await import('./origin-regression.mjs');
+ const {runEditing}=await import('./editing.mjs');await runEditing(localQuery);
+ if(process.env.E2E_BROWSER_EXECUTABLE){const {runEditingBrowser}=await import('./editing-browser.mjs');await runEditingBrowser(process.env.E2E_BROWSER_EXECUTABLE);}
  // Allow Worker waitUntil tasks to finish before inspecting local-only aggregates.
  await new Promise(r=>setTimeout(r,200));
  await stop(server);
@@ -94,6 +96,11 @@ try{
  assert.equal(replayResponse.status,201);const replay=await replayResponse.json();
  assert.equal(replay.replayed,true);assert.equal(replay.data.id,originFixture.question.id);assert.equal(new URL(replay.data.url).origin,CHANGED_PUBLIC_ORIGIN);
  console.log('PASS: runtime origin changes without rebuilding, migrating data or stale idempotent URLs.');
+ const edited=JSON.parse(fs.readFileSync('.sites-runtime/editing-durability.json','utf8'));
+ const ed=await (await checkedFetch('http://127.0.0.1:8788/api/v1/tips/'+edited.tip_id,{headers:smoke})).json();assert.equal(ed.data.revision,5);assert.equal(ed.data.updates[0].revision,2);
+ const eh=await (await checkedFetch('http://127.0.0.1:8788/api/v1/revisions/'+edited.tip_id,{headers:smoke})).json();assert.equal(eh.data.length,4);
+ const eq=await (await checkedFetch('http://127.0.0.1:8788/api/v1/questions/'+edited.question_id,{headers:smoke})).json();assert.equal(eq.data.answers[0].edit_locked,true);
+ console.log('PASS: edited content, prior versions and acceptance state survive restart.');
  const enhanced=JSON.parse(fs.readFileSync('.sites-runtime/enhancement-durability.json','utf8'));
  const enhancedQuestion=await (await checkedFetch('http://127.0.0.1:8788/api/v1/questions/'+enhanced.question_id,{headers:{'User-Agent':'DotExchangeSmokeTest/1.0'}})).json();
  assert.equal(enhancedQuestion.data.body,enhanced.original);assert.equal(enhancedQuestion.data.updates.length,2);assert.equal(enhancedQuestion.data.accepted_answer_id,enhanced.accepted_answer_id);assert.equal(enhancedQuestion.data.resolved,true);
