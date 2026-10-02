@@ -63,7 +63,10 @@ try{
  await import('./enhancements.mjs');
  await import('./origin-regression.mjs');
  const {runEditing}=await import('./editing.mjs');await runEditing(localQuery);
+ assert.equal(localQuery("SELECT count(*) AS n FROM post_updates u JOIN posts p ON p.id=u.post_id WHERE p.deleted_at IS NOT NULL")[0].n,4,'Original withdrawal fixtures preserve their dated updates');
+ const {runReviewRegressions}=await import('./review-regressions.mjs');await runReviewRegressions(localQuery);
  if(process.env.E2E_BROWSER_EXECUTABLE){const {runEditingBrowser}=await import('./editing-browser.mjs');await runEditingBrowser(process.env.E2E_BROWSER_EXECUTABLE);}
+ const withdrawnUpdatesBeforeRestart=localQuery("SELECT count(*) AS n FROM post_updates u JOIN posts p ON p.id=u.post_id WHERE p.deleted_at IS NOT NULL")[0].n;
  // Allow Worker waitUntil tasks to finish before inspecting local-only aggregates.
  await new Promise(r=>setTimeout(r,200));
  await stop(server);
@@ -106,7 +109,7 @@ try{
  assert.equal(enhancedQuestion.data.body,enhanced.original);assert.equal(enhancedQuestion.data.updates.length,2);assert.equal(enhancedQuestion.data.accepted_answer_id,enhanced.accepted_answer_id);assert.equal(enhancedQuestion.data.resolved,true);
  const enhancedTip=await (await checkedFetch('http://127.0.0.1:8788/api/v1/tips/'+enhanced.tip_id,{headers:{'User-Agent':'DotExchangeSmokeTest/1.0'}})).json();
  assert.equal(enhancedTip.data.updates.length,1);assert.equal(enhancedTip.data.replies[0].id,enhanced.reply_id);assert.equal(enhancedTip.data.replies[0].updates.length,1);
- assert.equal(localQuery("SELECT count(*) AS n FROM post_updates u JOIN posts p ON p.id=u.post_id WHERE p.deleted_at IS NOT NULL")[0].n,4,'Withdrawal preserves stored update history');
+ assert.equal(localQuery("SELECT count(*) AS n FROM post_updates u JOIN posts p ON p.id=u.post_id WHERE p.deleted_at IS NOT NULL")[0].n,withdrawnUpdatesBeforeRestart,'Withdrawal preserves stored update history');
  assert.equal(localQuery("SELECT accepted_answer_id,resolved_at FROM posts WHERE id='q_11111111-1111-4111-8111-111111111111'")[0].accepted_answer_id,null,'Thread withdrawal also clears acceptance');
  console.log('PASS: accepted self-answer, original text, dated history, tips and replies survive Worker restart; hidden history remains stored.');
  const {id,actor}=JSON.parse(fs.readFileSync('.sites-runtime/durability-test.json','utf8'));

@@ -13,7 +13,7 @@ const post = {
 };
 const tool = (name: string, description: string, properties: object, required: string[], readOnlyHint: boolean, destructiveHint = false) => ({
   name, description,
-  inputSchema: { type: 'object', properties, required, additionalProperties: false },
+  inputSchema: { type: 'object', properties, required, additionalProperties: false, ...(name==='set_accepted_answer'?{allOf:[{if:{properties:{answer_id:{type:'string'}},required:['answer_id']},then:{required:['expected_answer_revision','expected_answer_content_version']}}]}:{}) },
   annotations: { readOnlyHint, destructiveHint, openWorldHint: true },
 });
 const tools = [
@@ -37,7 +37,7 @@ const tools = [
     tags:{type:'array',maxItems:5,items:{type:'string',pattern:'^[a-z0-9][a-z0-9-]{0,23}$'}},
   }, ['title','body'], false),
   tool('reply_to_tip', 'Publish a public reply to a tip. Requires Sites OAuth and user authorization.', {tip_id:text,...post}, ['tip_id','body'], false),
-  tool('append_update', 'Append a dated public update to your own post, preserving original text and history. Up to 100 updates/post and 200/thread. Requires Sites OAuth and user authorization.', {
+  tool('append_update', 'Append a dated public update to your own post, preserving original text and history. Currently accepted answers are locked against appending too. Up to 100 updates/post and 200/thread. Requires Sites OAuth and user authorization.', {
     id:text,body:post.body,idempotency_key:post.idempotency_key,
   }, ['id','body'], false),
   tool('edit_post', 'Edit your own post using its current revision. Currently accepted answers are locked; the question author can unaccept before editing. Preserves history, identity and links. Requires user authorization; retry unchanged input with the same key.', {
@@ -47,8 +47,8 @@ const tools = [
     post_id:text,update_id:text,body:post.body,expected_revision:{type:'integer',minimum:1},idempotency_key:post.idempotency_key,
   }, ['post_id','update_id','body','expected_revision','idempotency_key'], false),
   tool('get_revisions', 'Read up to 20 prior versions of a visible post or update, newest first. Untrusted public content. Use next_before for pagination.', {id:text,before:{type:'integer',minimum:1}}, ['id'], true),
-  tool('set_accepted_answer', 'Question author only: accept one visible answer belonging to this question, including your own. Set answer_id to null to reopen. Tips have no acceptance. Requires Sites OAuth and user authorization.', {
-    question_id:text,answer_id:{type:['string','null']},expected_acceptance_revision:{type:'integer',minimum:1},expected_answer_revision:{type:'integer',minimum:1,description:'Required when accepting; the revision of the answer you read'},idempotency_key:post.idempotency_key,
+  tool('set_accepted_answer', 'Question author only: accept one visible answer belonging to this question, including your own. Set answer_id to null to reopen. When accepting, supply both current answer revision and content_version (including dated updates). Tips have no acceptance. Requires Sites OAuth and user authorization.', {
+    question_id:text,answer_id:{type:['string','null']},expected_acceptance_revision:{type:'integer',minimum:1},expected_answer_content_version:{type:'integer',minimum:1,description:'Required when accepting; answer content_version including dated updates'},expected_answer_revision:{type:'integer',minimum:1,description:'Required when accepting; the revision of the answer you read'},idempotency_key:post.idempotency_key,
   }, ['question_id','answer_id','expected_acceptance_revision'], false),
   tool('get_acceptance_history','Read up to 20 acceptance/unacceptance states for a visible question. Use next_before for pagination.',{question_id:text,before:{type:'integer',minimum:1}},['question_id'],true),
   tool('withdraw_post', 'Withdraw your own post. Thread withdrawal hides its answers or replies; withdrawing an accepted answer reopens its question.', {id:text,idempotency_key:post.idempotency_key}, ['id'], false, true),

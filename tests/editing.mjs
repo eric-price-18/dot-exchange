@@ -62,23 +62,23 @@ export async function runEditing(localQuery){
  await ok(`/api/v1/posts/${a.id}`,'PATCH',patch('answer',1),aOwner);
  await ok(`/api/v1/posts/${q.id}`,'PATCH',{...patch('question',1),title:'Revised question title'},qOwner);
  const accept=`/api/v1/questions/${q.id}/acceptance`;
- const setAccept=async(answer_id,extra={})=>{const state=(await ok(`/api/v1/questions/${q.id}`)).data;return ok(accept,'POST',{answer_id,expected_acceptance_revision:state.acceptance_revision,...(answer_id?{expected_answer_revision:state.answers.find(x=>x.id===answer_id).revision}:{}),...extra},qOwner);};
+ const setAccept=async(answer_id,extra={})=>{const state=(await ok(`/api/v1/questions/${q.id}`)).data;return ok(accept,'POST',{answer_id,expected_acceptance_revision:state.acceptance_revision,...(answer_id?{expected_answer_revision:state.answers.find(x=>x.id===answer_id).revision,expected_answer_content_version:state.answers.find(x=>x.id===answer_id).content_version}:{}),...extra},qOwner);};
  await setAccept(a.id);
  for(const target of [`/api/v1/posts/${a.id}`,`/api/v1/posts/${a.id}/updates/${au.id}`])assert.equal((await request(target,'PATCH',patch('locked',target.endsWith(au.id)?1:2),aOwner)).data.error.code,'accepted_answer_locked');
  assert.equal((await mcp('edit_post',{id:a.id,...patch('locked-mcp',2)},aOwner)).isError,true);
  await setAccept(null);
- await ok(`/api/v1/posts/${a.id}`,'PATCH',patch('after-unaccept',2),aOwner);
+ await ok(`/api/v1/posts/${a.id}`,'PATCH',patch('after-unaccept',2,'Revised answer after unacceptance.'),aOwner);
  assert.equal((await ok(`/api/v1/questions/${q.id}`)).data.answers[0].edit_locked,false);
- assert.equal((await request(accept,'POST',{answer_id:a.id,expected_acceptance_revision:3,expected_answer_revision:2},qOwner)).status,409);
+ assert.equal((await request(accept,'POST',{answer_id:a.id,expected_acceptance_revision:3,expected_answer_revision:2,expected_answer_content_version:3},qOwner)).status,409);
  await setAccept(a.id);
- await ok(`/api/v1/posts/${a.id}/updates`,'POST',{body:'Append a correction after acceptance.'},aOwner,201);
+ assert.equal((await request(`/api/v1/posts/${a.id}/updates`,'POST',{body:'Append attempt after acceptance.',idempotency_key:'locked-append-new'},aOwner)).status,409);
  // SQL batch serialization: if editing wins it is part of the accepted version;
  // if acceptance wins, the edit must fail. No write after acceptance is permitted.
  for(let i=0;i<3;i++){
   const qa=actor('race-q'+i),aa=actor('race-a'+i);
   const rq=(await ok('/api/v1/questions','POST',payload,qa,201)).data;
   const ra=(await ok(`/api/v1/questions/${rq.id}/answers`,'POST',{body:'Concurrent acceptance original.'},aa,201)).data;
-  const [e,c]=await Promise.all([request(`/api/v1/posts/${ra.id}`,'PATCH',patch('accept-race',1),aa),request(`/api/v1/questions/${rq.id}/acceptance`,'POST',{answer_id:ra.id,expected_acceptance_revision:1,expected_answer_revision:1},qa)]);
+  const [e,c]=await Promise.all([request(`/api/v1/posts/${ra.id}`,'PATCH',patch('accept-race',1),aa),request(`/api/v1/questions/${rq.id}/acceptance`,'POST',{answer_id:ra.id,expected_acceptance_revision:1,expected_answer_revision:1,expected_answer_content_version:1},qa)]);
   assert.deepEqual([e.status,c.status].sort(),[200,409]);
   const saved=(await ok(`/api/v1/questions/${rq.id}`)).data.answers[0];assert.equal(saved.edit_locked,c.status===200);assert.equal(saved.revision,e.status===200?2:1);
   if(c.status===200)assert.equal((await request(`/api/v1/posts/${ra.id}`,'PATCH',patch('after-race',saved.revision),aa)).status,409);
@@ -90,13 +90,13 @@ export async function runEditing(localQuery){
   const rq=(await ok('/api/v1/questions','POST',payload,qa,201)).data;
   const ra=(await ok(`/api/v1/questions/${rq.id}/answers`,'POST',{body:'Unaccept concurrency original.'},aa,201)).data;
   const acceptance=`/api/v1/questions/${rq.id}/acceptance`;
-  await ok(acceptance,'POST',{answer_id:ra.id,expected_acceptance_revision:1,expected_answer_revision:1},qa);
+  await ok(acceptance,'POST',{answer_id:ra.id,expected_acceptance_revision:1,expected_answer_revision:1,expected_answer_content_version:1},qa);
   const [clear,edit]=await Promise.all([request(acceptance,'POST',{answer_id:null,expected_acceptance_revision:2},qa),request(`/api/v1/posts/${ra.id}`,'PATCH',patch('unaccept-race',1),aa)]);
   assert.equal(clear.status,200);assert.ok([200,409].includes(edit.status));
   const state=(await ok(`/api/v1/questions/${rq.id}`)).data;
   assert.equal(state.resolved,false);assert.equal(state.answers[0].edit_locked,false);
   assert.equal(state.answers[0].revision,edit.status===200?2:1);
-  if(edit.status===200)assert.equal((await request(acceptance,'POST',{answer_id:ra.id,expected_acceptance_revision:3,expected_answer_revision:1},qa)).status,409);
+  if(edit.status===200)assert.equal((await request(acceptance,'POST',{answer_id:ra.id,expected_acceptance_revision:3,expected_answer_revision:1,expected_answer_content_version:1},qa)).status,409);
  }
  // Acceptance and unacceptance are question-author only and CAS-protected.
  assert.equal((await request(accept,'POST',{answer_id:null,expected_acceptance_revision:4},aOwner)).status,403);

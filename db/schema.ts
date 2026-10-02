@@ -5,6 +5,8 @@ export const posts = sqliteTable("posts", {
   authorLabel: text("author_label").notNull(), authorKey: text("author_key").notNull(),
   createdAt: text("created_at").notNull(), deletedAt: text("deleted_at"), requestKey: text("request_key"),
   revision: integer("revision").notNull().default(1), editedAt: text("edited_at"),
+  contentVersion: integer("content_version").notNull().default(1),
+  acceptedAnswerContentVersion: integer("accepted_answer_content_version"),
   acceptanceRevision: integer("acceptance_revision").notNull().default(1),
   acceptedAnswerRevision: integer("accepted_answer_revision"),
   acceptedAnswerId: text("accepted_answer_id"), resolvedAt: text("resolved_at")
@@ -43,5 +45,6 @@ export const contentRevisions = sqliteTable("content_revisions", {
 
 export const acceptanceHistory = sqliteTable("acceptance_history", {
   questionId:text("question_id").notNull(), revision:integer("revision").notNull(),
+  answerContentVersion:integer("answer_content_version"),
   answerId:text("answer_id"), answerRevision:integer("answer_revision"), changedAt:text("changed_at"),
 }, t=>[primaryKey({columns:[t.questionId,t.revision]})]);

@@ -9,7 +9,7 @@ async function withAcceptanceRevision(path,body,key){
  if(!path.endsWith('/acceptance')||!body||!Object.hasOwn(body,'answer_id'))return body;
  const signature=JSON.stringify([path,body,key]);if(key&&acceptanceInputs.has(signature))return acceptanceInputs.get(signature);
  const thread=(await request(path.replace('/acceptance',''))).data.data;
- const value={...body,expected_acceptance_revision:thread?.acceptance_revision??1,...(body.answer_id===null?{}:{expected_answer_revision:thread?.answers?.find(a=>a.id===body.answer_id)?.revision??1})};
+ const value={...body,expected_acceptance_revision:thread?.acceptance_revision??1,...(body.answer_id===null?{}:{expected_answer_revision:thread?.answers?.find(a=>a.id===body.answer_id)?.revision??1,expected_answer_content_version:thread?.answers?.find(a=>a.id===body.answer_id)?.content_version??1})};
  if(key)acceptanceInputs.set(signature,value);return value;
 }
 async function request(path,method='GET',body,headers={}){

@@ -6,12 +6,15 @@ has been performed. Agent-assisted implementation; independent review is require
 ## Semantics
 
 D1 batch transactions gate receipts, prior-version snapshots and content updates on
-the same ownership, visibility and revision precondition. Each edit increments only
-that content item's revision. Currently accepted answers and their existing dated
-updates are locked atomically against editing. Question-author-only unaccept reopens
+the same ownership, visibility and revision precondition. Each actual content edit increments only
+that content item's revision; unchanged saves retain it. Currently accepted answers and their existing dated
+updates are locked atomically against editing and appending. Question-author-only unaccept reopens
 the question and lets the answer author edit again. Accept/unaccept requires the
 question's current acceptance_revision; acceptance additionally requires the current
-answer revision. Races fail rather than accept a different version or overwrite an
+answer revision and content_version covering the answer plus all dated updates.
+Post edits, update edits and appends atomically advance content_version; an unchanged
+save does not. The Posted/Updated UI timestamps track each item's own content edits
+separately from aggregate versions and acceptance state. Races fail rather than accept a different version or overwrite an
 accepted answer. Acceptance transitions (including withdrawal reopening) are stored.
 Existing currently accepted records need no backfill: lock checks use the relationship,
 and their state is snapshotted on the first transition. Older history is not invented.
@@ -25,7 +28,7 @@ use the parent post visibility rules. Revisions are plain text, not instructions
 ## Safe release after independent review
 
 1. Confirm reviewed commit and current main; run `npm run check` in isolation.
-2. Inspect the new additive Drizzle migration and matching snapshot/journal.
+2. Inspect the new additive Drizzle migrations (0003 and 0004) and matching snapshots/journal.
    Existing migration files are immutable. Record a supported Sites D1 recovery point
    before production changes. Verify current accepted-answer compatibility on staging.
 3. Through the owner-controlled Sites workflow, save the reviewed source/build and
@@ -42,7 +45,7 @@ Prefer a forward fix or disable edit routes/tools/UI while retaining the new col
 revision and acceptance history tables and preconditions. Do not drop columns, delete revisions,
 rewrite old migrations, restore an old database over newer posts, or recreate posts.
 A previous Worker is schema-compatible because the migration is additive, but its
-acceptance writes do not record history or check revisions. If reverting to that
+acceptance writes do not record history or check aggregate versions. If reverting to that
 Worker is unavoidable, suspend acceptance mutations during the rollback window; do
 not resume editing until acceptance revision/history consistency has been checked. Sites migrations can be
 applied before a Worker upload fails: inspect the applied journal before retrying.

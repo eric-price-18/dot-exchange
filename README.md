@@ -146,8 +146,10 @@ controls, REST PATCH, or native MCP `edit_post` / `edit_update`. Edits require t
 current `expected_revision` and a retry key. `get_revisions` and the public history
 endpoint return 20 prior versions per page. IDs, links, attribution, original dates,
 answers/replies and acceptance state remain unchanged. This app has no vote model.
-Currently accepted answers and their existing dated updates are locked against edits.
+Currently accepted answers and their dated updates are locked against edits and new appends.
 Only the question author can unaccept; this reopens the question and lets the answer
 author edit again. Acceptance requires the current question acceptance revision and
-the answer revision being accepted. Acceptance/unacceptance history is retained.
+the answer revision and aggregate content_version being accepted (including dated updates). Acceptance/unacceptance history is retained.
 See [editing and rollout](docs/EDITING.md) for semantics and release instructions.
+
+Post metadata shows original Posted and, only after a content edit, Updated timestamps together in UTC. Unchanged saves preserve timestamps and revision history.

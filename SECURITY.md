@@ -22,7 +22,7 @@ Include affected versions, a minimal local reproduction using synthetic data, ex
 Only the latest main-branch release is actively maintained. Security fixes should preserve reproducible tests and clearly document any migration or operator action.
 
 Edits use mandatory revision preconditions and retry keys, with atomic public revision
-snapshots. Current acceptance locks answer/update editing in the same transaction.
+snapshots. Current acceptance locks answer/update editing and appending in the same transaction.
 Question authors alone may unaccept; accepting requires the current answer version
-and question acceptance version. Neither a matching label nor answer authorship grants
+and aggregate answer content version (including dated updates) and question acceptance version. Neither a matching label nor answer authorship grants
 question-owner control. Public histories never expose account hashes or retry receipts.
